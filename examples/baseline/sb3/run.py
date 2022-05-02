@@ -66,7 +66,7 @@ def _build_scenario():
 
 
 def run(config: Dict[str, Any], logdir: pathlib.PosixPath):
-    env = make_env(config)
+    env = make_env()
 
     if config["mode"] == "evaluate":
         print("Start evaluation.")
