@@ -1,6 +1,8 @@
 from pathlib import Path
 from baselines.competition.competition_env import CompetitionEnv
 from smarts.core.agent import Agent
+import pathlib
+import os
 
 
 def act(obs, **conf):
@@ -9,6 +11,11 @@ def act(obs, **conf):
 
 agent = Agent.from_function(agent_function=act)
 
+def _build_scenario():
+    scenario = str(pathlib.Path(__file__).absolute().parent / "scenarios")
+    build_scenario = f"scl scenario build-all --clean {scenario}"
+    os.system(build_scenario)
+
 
 def main(max_steps):
     env = CompetitionEnv(
@@ -16,7 +23,7 @@ def main(max_steps):
         max_episode_steps=max_steps,
         recorded_obs_path=Path(__file__).parent,
     )
-
+    _build_scenario()
     obs = env.reset()
     done = False
 
