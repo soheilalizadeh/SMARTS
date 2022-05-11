@@ -20,8 +20,8 @@ sys.path.insert(0, os.path.abspath(".."))
 # -- Project information -----------------------------------------------------
 
 project = "SMARTS"
-copyright = "2021, Huawei Technologies."
-author = "Huawei Noah's Ark Lab."
+copyright = "2021, Huawei Technologies"
+author = "Huawei Noah's Ark Lab"
 
 # The full version, including alpha/beta/rc tags
 release = VERSION
@@ -35,14 +35,14 @@ release = VERSION
 extensions = [
     "sphinx_rtd_theme",  # Read The Docs theme
     "sphinx.ext.autodoc",  # Automatically extract docs from docstrings
-    "sphinx.ext.coverage",  # make coverage generates documentation coverage reports
-    "sphinx.ext.napoleon",  # support Numpy and Google doc style
-    "sphinx.ext.viewcode",  # link to sourcecode from docs
+    "sphinx.ext.coverage",  # Make coverage generates documentation coverage reports
+    "sphinx.ext.napoleon",  # Support Numpy and Google doc style
+    "sphinx.ext.viewcode",  # Link to source code from docs
     "sphinx.ext.graphviz",  # TODO: should we include this?
     "sphinxcontrib.apidoc",
 ]
 
-# configuring automated generation of api documentation
+# Configure automatic generation of API documentation.
 # See: https://github.com/sphinx-contrib/apidoc
 apidoc_module_dir = ".."
 apidoc_excluded_paths = ["scenarios", "setup.py"]

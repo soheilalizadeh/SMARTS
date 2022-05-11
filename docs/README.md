@@ -2,7 +2,7 @@
 
 Execute the following to build the docs locally.
 ```bash
-cd <path/to/SMARTS>
+cd <path>/SMARTS
 pip install -e .[doc]
 make docs
 python -m http.server -d docs/_build/html
