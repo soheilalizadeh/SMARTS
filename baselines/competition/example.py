@@ -19,7 +19,7 @@ def _build_scenario():
 
 def main(max_steps):
     env = CompetitionEnv(
-        scenarios=["scenarios/loop"],
+        scenarios=["scenarios/straight"],
         max_episode_steps=max_steps,
         recorded_obs_path=Path(__file__).parent,
     )
