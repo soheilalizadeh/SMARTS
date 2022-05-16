@@ -75,6 +75,7 @@ def run(config, logdir):
         print("Start evaluation.")
         model = CQL.from_json('d3rlpy_logs/CQL_20220511154538/params.json')
         model.load_model('d3rlpy_logs/CQL_20220511154538/model_0.pt')
+        print('finish loading model')
     else:
         
         # generating data from smarts for training
