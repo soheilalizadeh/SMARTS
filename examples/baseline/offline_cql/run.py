@@ -20,7 +20,6 @@ yaml = YAML(typ="safe")
 
 def main(args: argparse.Namespace):
     # Load config file.
-    print('i am')
     config_file = yaml.load(
         (pathlib.Path(__file__).absolute().parent / "config.yaml").read_text()
     )
@@ -40,7 +39,7 @@ def main(args: argparse.Namespace):
         pathlib.Path(__file__).absolute().parents[0] / "max_episode_steps"
     )
     """
-    _build_scenario()
+    #_build_scenario()
 
     # Train or evaluate.
     if config_env["mode"] == "train" and not args.logdir:
@@ -74,9 +73,8 @@ def run(config, logdir):
     num_epochs = config['num_epochs']
     if config["mode"] == "evaluate":
         print("Start evaluation.")
-        print(logdir)
-        model = CQL.from_json(logdir/"d3rlpy_log/param.json")
-        model.load_model(logdir/"d3rlpy_log/model.pt")
+        model = CQL.from_json('d3rlpy_logs/CQL_20220511154538/params.json')
+        model.load_model('d3rlpy_logs/CQL_20220511154538/model_0.pt')
     else:
         
         # generating data from smarts for training
