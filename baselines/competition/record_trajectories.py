@@ -59,7 +59,7 @@ def main(episodes: int, max_steps: int):
         envision=None,
     )
 
-    scenario_name = "baselines/competition/scenarios/follow"
+    scenario_name = "scenarios/follow"
     scenarios_iterator = Scenario.scenario_variations([scenario_name], [])
     for episode in range(episodes):
         build_scenario([scenario_name])
@@ -125,4 +125,4 @@ def main(episodes: int, max_steps: int):
 
 
 if __name__ == "__main__":
-    main(episodes=10, max_steps=100)
+    main(episodes=3, max_steps=100)
