@@ -18,12 +18,17 @@ def _build_scenario():
 
 
 def main(max_steps):
+<<<<<<< HEAD
     env = CompetitionEnv(
         scenarios=["scenarios/straight"],
         max_episode_steps=max_steps,
         recorded_obs_path=Path(__file__).parent,
     )
     _build_scenario()
+=======
+    env = CompetitionEnv(scenarios=["scenarios/straight"], max_episode_steps=max_steps)
+
+>>>>>>> 4207aacc7d00ae98afdbbdd5e87e8ce0bff7550b
     obs = env.reset()
     done = False
 
