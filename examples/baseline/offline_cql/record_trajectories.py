@@ -129,4 +129,4 @@ def main(episodes: int, max_steps: int):
 
 
 if __name__ == "__main__":
-    main(episodes=3, max_steps=100)
+    main(episodes=10, max_steps=300)

@@ -5,9 +5,11 @@ from d3rlpy.dataset import MDPDataset
 from d3rlpy.algos import CQL
 import numpy as np
 from competition_env import CompetitionEnv
+from offline_competition_env import OfflineCompetitionEnv
 import gym
 from ruamel.yaml import YAML
 import os
+import pandas as pd
 
 from examples.argument_parser import default_argument_parser
 
@@ -16,7 +18,46 @@ import argparse
 from datetime import datetime
 yaml = YAML(typ="safe")
 
+def data_process(df_behind, df_front):
+    df_process = pd.DataFrame()
+    cols = ['x_behind', 'y_behind', 'x_front', 'y_front', 'dx_behind', 'dy_behind', 'dist']
+    for i in range(df_behind.shape[0]):
+        x_behind = df_behind.iloc[i]['position_x']
+        y_behind = df_behind.iloc[i]['position_y']
+        x_front = df_front.iloc[i]['position_x']
+        y_front = df_front.iloc[i]['position_y']
+        dx_behind = df_behind.iloc[i]['delta_x']
+        dy_behind = df_behind.iloc[i]['delta_y']
+        dist = np.sqrt((x_behind - x_front) ** 2 + (y_behind - y_front) ** 2)
+        temp_df = pd.DataFrame([[x_behind, y_behind, x_front, y_front, dx_behind, dy_behind, dist]], columns=cols)
+        df_process = pd.concat([df_process, temp_df])
+    return df_process
 
+
+
+def clean_data(df):
+    df_clean = pd.DataFrame()
+    i = 0
+    while i < df.shape[0] - 1:
+        if df.iloc[i]['sim_time'] == df.iloc[i + 1]['sim_time']:
+            sub_df = df.iloc[i : i+2, :]
+            df_clean = pd.concat([df_clean, sub_df])
+            i += 2
+        else:
+            i += 1
+    return df_clean
+
+def get_vehicle_id(df):
+    vehicle_behind_id = 'NA'
+    vehicle_front_id = 'NA'
+    for i in range(df.shape[0]):
+        if 'behind' in df.iloc[i]['agent_id']:
+            vehicle_behind_id = df.iloc[i]['agent_id']
+        else: 
+            vehicle_front_id = df.iloc[i]['agent_id']
+        if vehicle_behind_id != 'NA' and vehicle_front_id != 'NA':
+            break
+    return vehicle_behind_id, vehicle_front_id
 
 def main(args: argparse.Namespace):
     # Load config file.
@@ -69,74 +110,49 @@ def _build_scenario():
 def run(config, logdir):
     #scenarios = config["scenarios_dir"]
     max_episode_steps = config['max_episode_steps']
-    env = CompetitionEnv(["scenarios/follow"], max_episode_steps)
+    env = OfflineCompetitionEnv(scenarios)(["scenarios/follow"], max_episode_steps)
     num_epochs = config['num_epochs']
     if config["mode"] == "evaluate":
         print("Start evaluation.")
-        model = CQL.from_json('d3rlpy_logs/CQL_20220511154538/params.json')
-        model.load_model('d3rlpy_logs/CQL_20220511154538/model_0.pt')
+        model = CQL.from_json('d3rlpy_logs/CQL_20220520122229/params.json')
+        model.load_model('d3rlpy_logs/CQL_20220520122229/model_5000.pt')
         print('finish loading model')
+
+        observation=env.reset
+        aciton = model.prediction(state)
+        env.step(action)
+        observation
+
+
+
+
+
     else:
-        
-        # generating data from smarts for training
-        env.action_space = gym.spaces.Box(
-            low=-1e6, high=1e6, shape=(2,), dtype=np.float32
-        )   
+        print('Start training using existing dataset')
+        df_dataset = pd.DataFrame()
+        for filename in os.listdir('recorded_trajectories'):
+            df = pd.read_csv('recorded_trajectories/' + filename)
+            df = clean_data(df)
+            vehicle_behind_id, vehicle_front_id = get_vehicle_id(df)
+            df_behind = df.loc[df['agent_id'] == vehicle_behind_id]
+            df_front = df.loc[df['agent_id'] == vehicle_front_id]
+            df_process = data_process(df_behind, df_front)
+            df_dataset = pd.concat([df_dataset, df_process])
+        df_dataset.to_csv('dataset.csv')
 
-        observations = []
-        actions = []
-        rewards = []
-        terminals = []
-        timeouts = []
-        infos = []
+        observations = df_dataset[['x_behind', 'y_behind', 'x_front', 'y_front']].to_numpy()
+        actions = df_dataset[['dx_behind', 'dy_behind']].to_numpy()
+        rewards = - df_dataset[['dist']].to_numpy()
+        terminals = np.array([0] * df_dataset.shape[0])
+        episode_terminals = np.random.randint(2, size=df_dataset.shape[0])
+        dataset = MDPDataset(observations, actions, rewards, terminals, episode_terminals)
+        cql = d3rlpy.algos.CQL(use_gpu=False)
 
-        for episode in episodes(n=num_episodes):
-            agent = Agent.from_function(agent_function=act)
-            observation = env.reset()
-            episode.record_scenario(env.scenario_log)
+        cql.fit(dataset, 
+                eval_episodes=dataset, 
+                n_epochs=num_epochs, 
 
-            done = False
-            while not done:
-                agent_action = agent.act(observation)
-                observation, reward, done, info = env.step(agent_action)
-                episode.record_step(observation, reward, done, info)
-                
-                # collect data
-                observations.append(observation)
-                actions.append(agent_action)
-                rewards.append(reward)
-                terminals.append(done)
-                timeouts.append(done)
-                infos.append(info)
-
-        # create dataset
-        dataset = MDPDataset(np.array(observations), np.array(actions), np.array(rewards), np.array(terminals))
-        if config["mode"] == "train" and args.logdir:
-            print("Start training from existing model.")
-            model = CQL.from_json(logdir/"d3rlpy_log/param.json")
-            model.load_model(logdir/"d3rlpy_log/model.pt")
-            model.fit(dataset, 
-            eval_episodes=dataset, 
-            n_epochs=num_epochs, 
-            scorers={
-                'environment': d3rlpy.metrics.evaluate_on_environment(env),
-                'td_error': d3rlpy.metrics.td_error_scorer
-            }
-            )
-            model.save_model(logdir / "model.pt")
-        
-        else:
-            print("Start training from beginning")
-            model = CQL()
-            model.fit(dataset, 
-            eval_episodes=dataset, 
-            n_epochs=num_epochs, 
-            scorers={
-                'environment': d3rlpy.metrics.evaluate_on_environment(env),
-                'td_error': d3rlpy.metrics.td_error_scorer
-            }
-            )
-            model.save_model("model.pt")
+        )
     
     env.close()
 
@@ -160,7 +176,7 @@ if __name__ == "__main__":
         "--head", help="Run the simulation with display.", action="store_true"
     )
     parser.add_argument(
-        "--num_epochs", help="Number of training epochs.", type=int, default=1e3
+        "--num_epochs", help="Number of training epochs.", type=int, default=1000
     )
     parser.add_argument(
         "--max_episode_steps", help="Number of steps in each episode.", type=int, default=300

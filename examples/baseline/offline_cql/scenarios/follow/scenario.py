@@ -14,7 +14,7 @@ flow_lead = [
             end=("gneE4",1,'max'),
         ),
         rate=1,
-        actors={t.TrafficActor("car"): 1},
+        actors={t.TrafficActor("front"): 1},
     )
 ]
 flow_follow = [
@@ -24,7 +24,7 @@ flow_follow = [
             end=("gneE4",1,'max'),
         ),
         rate=1,
-        actors={t.TrafficActor("car"): 1},
+        actors={t.TrafficActor("behind"): 1},
     )
 ]
 # traffic = t.Traffic(
