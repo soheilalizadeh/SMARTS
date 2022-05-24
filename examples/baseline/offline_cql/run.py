@@ -5,7 +5,6 @@ from d3rlpy.dataset import MDPDataset
 from d3rlpy.algos import CQL
 import numpy as np
 from competition_env import CompetitionEnv
-from offline_competition_env import OfflineCompetitionEnv
 import gym
 from ruamel.yaml import YAML
 import os
@@ -103,29 +102,38 @@ def main(args: argparse.Namespace):
     run(config_env, logdir)
 
 def _build_scenario():
-    scenario = str(pathlib.Path(__file__).absolute().parent / "scenarios")
+    scenario = str(pathlib.Path(__file__).absolute().parent / "evaluate_scenarios/follow_evaluation")
     build_scenario = f"scl scenario build-all --clean {scenario}"
     os.system(build_scenario)
+
+def observation_to_state(observation):
+
+    return state
 
 def run(config, logdir):
     #scenarios = config["scenarios_dir"]
     max_episode_steps = config['max_episode_steps']
-    env = OfflineCompetitionEnv(scenarios)(["scenarios/follow"], max_episode_steps)
     num_epochs = config['num_epochs']
     if config["mode"] == "evaluate":
+        env = CompetitionEnv(["evaluate_scenarios/follow_evaluation"], max_episode_steps=max_episode_steps, headless=False)
+        #_build_scenario()
         print("Start evaluation.")
-        model = CQL.from_json('d3rlpy_logs/CQL_20220520122229/params.json')
-        model.load_model('d3rlpy_logs/CQL_20220520122229/model_5000.pt')
-        print('finish loading model')
-
-        observation=env.reset
-        aciton = model.prediction(state)
-        env.step(action)
-        observation
-
-
-
-
+        #model = CQL.from_json('d3rlpy_logs/CQL_20220520122229/params.json')
+        #model.load_model('d3rlpy_logs/CQL_20220520122229/model_5000.pt')
+        obs=env.reset()
+        done = False
+        while not done:
+            ego_pos_x = obs.ego['pos'][0]
+            ego_pos_y = obs.ego['pos'][1]
+            neighbor_pos_x = obs.neighbors['pos'][0][0]
+            neighbor_pos_y = obs.neighbors['pos'][0][1]
+            state = np.array([ego_pos_x, ego_pos_y, neighbor_pos_x, neighbor_pos_y])
+            print(state)
+            #action = model.predict([state])[0]
+            action = np.array([0, 0])
+            obs, reward, done, extra = env.step(action)
+            print(done)
+        env.close()
 
     else:
         print('Start training using existing dataset')
@@ -154,7 +162,7 @@ def run(config, logdir):
 
         )
     
-    env.close()
+
 
 
 if __name__ == "__main__":
