@@ -24,7 +24,7 @@ from smarts.sstudio.types import (
 
 normal = TrafficActor(
     name="car",
-    speed=Distribution(sigma=0.8, mean=0.8),
+    speed=Distribution(sigma=0.8, mean=1),
 )
 # cooperative = TrafficActor(
 #     name="cooperative",
@@ -85,7 +85,7 @@ for name, routes in enumerate(route_comb):
                     end=("gneE4", r[1], "max"),
                 ),
                 # Random flow rate, between x and y vehicles per minute.
-                rate=60 * random.uniform(8, 15),
+                rate=60 * random.uniform(1, 3),
                 # Random flow start time, between x and y seconds.
                 begin=random.uniform(0, 7),
                 # For an episode with maximum_episode_steps=3000 and step
