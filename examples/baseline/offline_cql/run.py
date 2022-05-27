@@ -19,7 +19,7 @@ yaml = YAML(typ="safe")
 
 def data_process(df_behind, df_front):
     df_process = pd.DataFrame()
-    cols = ['x_behind', 'y_behind', 'x_front', 'y_front', 'dx_behind', 'dy_behind', 'dist']
+    cols = ['x_behind', 'y_behind', 'x_front', 'y_front', 'dx_behind', 'dy_behind', 'lane_behind', 'lane_front', 'reward']
     for i in range(df_behind.shape[0]):
         x_behind = df_behind.iloc[i]['position_x']
         y_behind = df_behind.iloc[i]['position_y']
@@ -27,8 +27,11 @@ def data_process(df_behind, df_front):
         y_front = df_front.iloc[i]['position_y']
         dx_behind = df_behind.iloc[i]['delta_x']
         dy_behind = df_behind.iloc[i]['delta_y']
+        lane_behind = df_behind.iloc[i]['lane_index']
+        lane_front = df_front.iloc[i]['lane_index']
         dist = np.sqrt((x_behind - x_front) ** 2 + (y_behind - y_front) ** 2)
-        temp_df = pd.DataFrame([[x_behind, y_behind, x_front, y_front, dx_behind, dy_behind, dist]], columns=cols)
+        reward = - dist
+        temp_df = pd.DataFrame([[x_behind, y_behind, x_front, y_front, dx_behind, dy_behind, lane_behind, lane_front, reward]], columns=cols)
         df_process = pd.concat([df_process, temp_df])
     return df_process
 
@@ -36,7 +39,7 @@ def data_process(df_behind, df_front):
 
 def clean_data(df):
     df_clean = pd.DataFrame()
-    i = 0
+    i = 2
     while i < df.shape[0] - 1:
         if df.iloc[i]['sim_time'] == df.iloc[i + 1]['sim_time']:
             sub_df = df.iloc[i : i+2, :]
@@ -116,10 +119,12 @@ def run(config, logdir):
     num_epochs = config['num_epochs']
     if config["mode"] == "evaluate":
         env = CompetitionEnv(["evaluate_scenarios/follow_evaluation"], max_episode_steps=max_episode_steps, headless=False)
-        #_build_scenario()
+        _build_scenario()
         print("Start evaluation.")
         #model = CQL.from_json('d3rlpy_logs/CQL_20220520122229/params.json')
         #model.load_model('d3rlpy_logs/CQL_20220520122229/model_5000.pt')
+        model = CQL.from_json('d3rlpy_logs/CQL_20220526131743/params.json')
+        model.load_model('d3rlpy_logs/CQL_20220526131743/model_25500.pt')
         obs=env.reset()
         done = False
         while not done:
@@ -129,38 +134,48 @@ def run(config, logdir):
             neighbor_pos_y = obs.neighbors['pos'][0][1]
             state = np.array([ego_pos_x, ego_pos_y, neighbor_pos_x, neighbor_pos_y])
             print(state)
-            #action = model.predict([state])[0]
-            action = np.array([0, 0])
+            action = model.predict([state])[0]
+            print(action)
+            #action = np.array([0.1, 0.1])
             obs, reward, done, extra = env.step(action)
             print(done)
         env.close()
 
     else:
-        print('Start training using existing dataset')
+        
+        
         df_dataset = pd.DataFrame()
-        for filename in os.listdir('recorded_trajectories'):
-            df = pd.read_csv('recorded_trajectories/' + filename)
-            df = clean_data(df)
-            vehicle_behind_id, vehicle_front_id = get_vehicle_id(df)
-            df_behind = df.loc[df['agent_id'] == vehicle_behind_id]
-            df_front = df.loc[df['agent_id'] == vehicle_front_id]
-            df_process = data_process(df_behind, df_front)
-            df_dataset = pd.concat([df_dataset, df_process])
-        df_dataset.to_csv('dataset.csv')
-
+        if os.path.isfile('dataset.csv'):
+            print('Start training using existing dataset')
+            df_dataset = pd.read_csv('dataset.csv')
+        else:
+            print('start processing data')
+            for filename in os.listdir('recorded_trajectories'):
+                df = pd.read_csv('recorded_trajectories/' + filename)
+                df = clean_data(df)
+                vehicle_behind_id, vehicle_front_id = get_vehicle_id(df)
+                df_behind = df.loc[df['agent_id'] == vehicle_behind_id]
+                df_front = df.loc[df['agent_id'] == vehicle_front_id]
+                df_process = data_process(df_behind, df_front)
+                df_dataset = pd.concat([df_dataset, df_process])
+            df_dataset.to_csv('dataset.csv')
+            print('finish processing data')
+        
+        df_dataset = pd.read_csv('dataset.csv')
         observations = df_dataset[['x_behind', 'y_behind', 'x_front', 'y_front']].to_numpy()
         actions = df_dataset[['dx_behind', 'dy_behind']].to_numpy()
-        rewards = - df_dataset[['dist']].to_numpy()
+        rewards = df_dataset[['reward']].to_numpy()
         terminals = np.array([0] * df_dataset.shape[0])
         episode_terminals = np.random.randint(2, size=df_dataset.shape[0])
         dataset = MDPDataset(observations, actions, rewards, terminals, episode_terminals)
-        cql = d3rlpy.algos.CQL(use_gpu=False)
+        cql = d3rlpy.algos.CQL(use_gpu=False, conservative_weight=10, alpha_learning_rate=0.0, initial_alpha=1e-5)
 
         cql.fit(dataset, 
                 eval_episodes=dataset, 
                 n_epochs=num_epochs, 
 
         )
+        cql.save_model('model.pt')
     
 
 
