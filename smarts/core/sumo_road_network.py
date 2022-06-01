@@ -1055,13 +1055,19 @@ class SumoRoadNetwork(RoadMap):
                 continue
 
             lane_shape = lane_to_poly[lane_id]
-            incoming = self._graph.getLane(lane_id).getIncoming()[0]
+            incomings = self._graph.getLane(lane_id).getIncoming()
+            if not incomings:
+                continue
+            incoming = incomings[0]
             incoming_shape = lane_to_poly.get(incoming.getID())
             if incoming_shape:
                 lane_shape = Polygon(snap(lane_shape, incoming_shape, snap_threshold))
                 lane_to_poly[lane_id] = lane_shape
 
-            outgoing = self._graph.getLane(lane_id).getOutgoing()[0].getToLane()
+            outgoings = self._graph.getLane(lane_id).getOutgoing()
+            if not outgoings:
+                continue
+            outgoing = outgoings[0].getToLane()
             outgoing_shape = lane_to_poly.get(outgoing.getID())
             if outgoing_shape:
                 lane_shape = Polygon(snap(lane_shape, outgoing_shape, snap_threshold))

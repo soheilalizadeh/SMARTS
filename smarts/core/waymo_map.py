@@ -21,7 +21,9 @@
 import heapq
 import logging
 import math
+import os
 import random
+import re
 import time
 from collections import deque
 from copy import deepcopy
@@ -50,7 +52,14 @@ from .shape import (
 )
 from .utils.file import read_tfrecord_file
 from .utils.geometry import buffered_shape, generate_mesh_from_polygons
-from .utils.math import inplace_unwrap, radians_to_vec, ray_boundary_intersect, vec_2d
+from .utils.math import (
+    inplace_unwrap,
+    min_angles_difference_signed,
+    radians_to_vec,
+    ray_boundary_intersect,
+    vec_2d,
+    vec_to_radians,
+)
 
 # pytype: disable=import-error
 
@@ -690,7 +699,22 @@ class WaymoMap(RoadMap):
         self._link_splits(feat_splits)
         self._create_roads_and_lanes(feat_splits)
 
-        # possible heuristic:  for each feat_id, if first and last lane are in junction, then all lanes in b/w are
+        # heuristic:  if some part of a lane feature was in a junction,
+        # then other "nearby" parts of the lane are too.
+        junction_feats = {
+            lane._feature_id: lane
+            for road in self._roads.values()
+            for lane in road.lanes
+            if road.is_junction
+        }
+        for lane in self._lanes.values():
+            junct_feat = junction_feats.get(lane._feature_id)
+            if not junct_feat:
+                continue
+            hd = lane._bbox.as_shapely.hausdorff_distance(junct_feat._bbox.as_shapely)
+            # TODO:  still experimenting with this... will explain once I find a good value.
+            if hd < 30:
+                lane.road._is_junction = True
 
         # don't need these anymore
         self._polyline_cache = None
@@ -747,6 +771,17 @@ class WaymoMap(RoadMap):
             )
             and map_spec.shift_to_origin == self._map_spec.shift_to_origin
         )
+
+    def export(self, target_format: str, output_path: str, overwrite: bool = True):
+        if not overwrite and os.path.exists(os.path.join(output_path)):
+            self._log.warning(
+                "{output_path} exists; skipping RoadMap export.  (specify overwrite=True to overwrite it.)"
+            )
+            return
+        if target_format == "SUMO":
+            self._write_as_sumo(output_path)
+            return
+        raise ValueError(f"export to format '{target_format}' not supported")
 
     @cached_property
     def bounding_box(self) -> Optional[BoundingBox]:
@@ -1289,6 +1324,7 @@ class WaymoMap(RoadMap):
         ) -> Polygon:
             """Returns the polygon representing this buffered by buffered_width (which must be non-negative),
             where buffer_width is a buffer around the perimeter of the polygon."""
+            # XXX:  this should not be public
             # TODO:  use buffer_width
             return Polygon(
                 (
@@ -1826,3 +1862,337 @@ class WaymoMap(RoadMap):
         )
 
         return result
+
+    def _snap_junction(self, junction_road: RoadMap.Road) -> Set[RoadMap.Road]:
+        # Try to get all other roads in the "same" junction as junction_road
+        # by iteratively going back and forth through (hopefully) all possible
+        # lanes in the junction.
+        assert junction_road.is_junction
+        check_stack = deque()
+        checked_roads = set()
+        junction_roads = {junction_road}
+        check_stack.append((junction_road, "outgoing"))
+        while check_stack:
+            road, direction = check_stack.pop()
+            for cand in getattr(road, f"{direction}_roads"):
+                if (cand, direction) in checked_roads:
+                    continue
+                checked_roads.add((cand, direction))
+                if cand.is_junction:
+                    junction_roads.add(cand)
+                    check_stack.append((cand, direction))
+                else:
+                    check_stack.append(
+                        (cand, "incoming" if direction == "outgoing" else "outgoing")
+                    )
+        return junction_roads
+
+    def _write_as_sumo(self, output_path: str):
+        import lxml.etree as xml
+        from lxml.builder import ElementMaker
+
+        # map.net.xml preamble
+        nsmap = {"xsi": "http://www.w3.org/2001/XMLSchema-instance"}
+        elem_maker = ElementMaker(nsmap=nsmap)
+        sumo_net = elem_maker.net(
+            {
+                "version": "1.3",
+                "junctionCornerDetail": "5",
+                "limitTurnSpeed": "5.50",
+                f"{{{nsmap['xsi']}}}noNamespaceSchemaLocation": "http://sumo.dlr.de/xsd/net_file.xsd",
+            }
+        )
+        location = elem_maker.location
+        bb = self.bounding_box
+        sumo_net.append(
+            location(
+                netOffset="0.00,0.00",
+                convBoundary=f"{bb.min_pt.x},{bb.min_pt.y},{bb.max_pt.x},{bb.max_pt.y}",
+                origBoundary="-10000000000.00,-10000000000.00,10000000000.00,10000000000.00",
+                projParameter="!",
+            )
+        )
+
+        def midpoint(p1, p2) -> Tuple[float, float]:
+            return (round(0.5 * (p1[0] + p2[0]), 2), round(0.5 * (p1[1] + p2[1]), 2))
+
+        def round_tuple(t: Tuple[float, float], places: int = 2) -> Tuple[float, float]:
+            return (round(t[0], places), round(t[1], places))
+
+        lane_to_internal = dict()
+
+        def edge_el_id(road) -> str:
+            return f"edge-{road.road_id}"
+
+        def lane_el_id(lane) -> str:
+            ie = lane_to_internal.get(lane)
+            return f"{ie}_0" if ie else f"{edge_el_id(lane.road)}_{lane.index}"
+
+        def turn_dir(in_lane, out_lane) -> str:
+            in_vec = in_lane.vector_at_offset(max(in_lane.length - 15, 0))
+            in_angle = vec_to_radians(in_vec[:2])
+            out_vec = out_lane.vector_at_offset(min(15, out_lane.length))
+            out_angle = vec_to_radians(out_vec[:2])
+            ad = min_angles_difference_signed(in_angle, out_angle)
+            if abs(ad) < math.pi / 4:
+                return "s"
+            return "r" if ad > 0 else "l"
+
+        stringify = re.compile(r"(\),?)|( ?\()|(\[)|(\])")
+        strip = re.compile(r"(\s|,)\s+")
+
+        jcnt = 0
+        junctions = elem_maker.junctions()
+        dones = set()
+        road_starts = dict()
+        road_ends = dict()
+
+        # Try to create intersections (junctions with internal lanes) first
+        for road in self._roads.values():
+            if not road.is_junction or road in dones:
+                continue
+            if road.is_composite:
+                continue
+            junction_id = f"junction-{jcnt}"
+            jcnt += 1
+            x_min = y_min = None
+            x_max = y_max = None
+            inc_lanes = set()
+            int_lanes = set()
+            ie_cnt = 0
+            # get all roads in the same junction
+            junction_roads = self._snap_junction(road)
+            assert junction_roads
+            for jr in junction_roads:
+                assert jr.is_junction
+                # only allow a road to be in one junction at most
+                assert jr not in dones, f"{jr.road_id} {junction_id}"
+                dones.add(jr)
+
+                # make all junction lanes internal and keep track of their ids
+                inc_lanes |= {
+                    lane_el_id(il)
+                    for ir in jr.incoming_roads
+                    for il in ir.lanes
+                    if not ir.is_junction
+                }
+                for lane in jr.lanes:
+                    int_edge_id = f":{junction_id}_{ie_cnt}"
+                    int_lane_id = f"{int_edge_id}_0"
+                    ie_cnt += 1
+                    int_lanes.add(int_lane_id)
+                    int_edge = elem_maker.edge(id=int_edge_id, function="internal")
+                    lane_shape_str = re.sub(
+                        stringify, " ", f"{lane._lane_polygon}"
+                    ).strip()
+                    lane_shape_str = re.sub(strip, r"\1", lane_shape_str)
+                    lane_el = elem_maker.lane(
+                        id=int_lane_id,
+                        index="0",
+                        speed=str(lane.speed_limit),
+                        length=str(lane.length),
+                        width=str(lane.width_at_offset(0)[0]),
+                        shape=lane_shape_str,
+                    )
+                    int_edge.append(lane_el)
+                    sumo_net.append(int_edge)
+                    lane_to_internal[lane] = int_edge_id
+
+                # keep track of the junction boundaries
+                x_min = (
+                    min(jr._bbox.min_pt.x, x_min)
+                    if x_min is not None
+                    else jr._bbox.min_pt.x
+                )
+                y_min = (
+                    min(jr._bbox.min_pt.y, y_min)
+                    if y_min is not None
+                    else jr._bbox.min_pt.y
+                )
+                x_max = (
+                    min(jr._bbox.max_pt.x, x_max)
+                    if x_max is not None
+                    else jr._bbox.max_pt.x
+                )
+                y_max = (
+                    min(jr._bbox.max_pt.y, y_max)
+                    if y_max is not None
+                    else jr._bbox.max_pt.y
+                )
+
+                # when we write edges, we'll need to know when they end in this junction
+                for ir in jr.incoming_roads:
+                    if not ir.is_junction:
+                        road_ends[ir] = junction_id
+                for ogr in jr.outgoing_roads:
+                    if not ogr.is_junction:
+                        road_starts[ogr] = junction_id
+
+            centroid_x = 0.5 * (x_max + x_min)
+            centroid_y = 0.5 * (y_max + y_min)
+            inc_lanes_str = " ".join(inc_lanes)
+            int_lanes_str = " ".join(int_lanes)
+            junction = elem_maker.junction(
+                id=junction_id,
+                type="priority",
+                x=str(centroid_x),
+                y=str(centroid_y),
+                incLanes=inc_lanes_str,
+                intLanes=int_lanes_str,
+                shape=f"{x_min},{y_min} {x_max},{y_max}",
+            )
+            # Sumo requires we specify foes for junctions with internal lanes.
+            for i, il in enumerate(int_lanes):
+                # TODO: how to figure these out?
+                foes = "0" * len(int_lanes)
+                response = "0" * len(int_lanes)
+                request = elem_maker.request(
+                    index=f"{i}", foes=foes, response=response, cont="0"
+                )
+                junction.append(request)
+            junctions.append(junction)
+
+        # now find non-intersection junctions (those that begin/end edges)
+        junctions_dict = dict()
+        for road in self._roads.values():
+            if road.is_junction:
+                continue
+            if road.is_composite:
+                continue
+            # try to share a junction node for any roads that begin/end at roughly the same point
+            # hence, we round the starting/ending geometries to decrease the chances that some FP variation messes this up.
+            start_line = (
+                round_tuple(road._leftmost_edge_shape[0]),
+                round_tuple(road._rightmost_edge_shape[-1]),
+            )
+            start_pt = midpoint(*start_line)
+            end_line = (
+                round_tuple(road._leftmost_edge_shape[-1]),
+                round_tuple(road._rightmost_edge_shape[0]),
+            )
+            end_pt = midpoint(*end_line)
+            # second element of tuple is whether the road starts or ends at this junction node
+            junctions_dict.setdefault((start_line, start_pt), []).append((road, True))
+            junctions_dict.setdefault((end_line, end_pt), []).append((road, False))
+        for jgeom, jinfo in junctions_dict.items():
+            inc_lanes = [
+                lane_el_id(lane)
+                for road, start in jinfo
+                for lane in road.lanes
+                if not start and road not in road_ends
+            ]
+            if not inc_lanes and not any(
+                start and road not in road_starts for road, start in jinfo
+            ):
+                # these junctions were (probably?) taken care of as intersections above...
+                continue
+            jtype = "unregulated"  # ... or "priority"? if we use "priority", then Sumo wants more info.
+            if len(jinfo) == 1:
+                jtype = "dead_end"
+            elif len(jinfo) == 2 and (
+                (
+                    jinfo[0][1]
+                    and not jinfo[1][1]
+                    and len(jinfo[0][0].lanes) < len(jinfo[1][0].lanes)
+                )
+                or (
+                    not jinfo[0][1]
+                    and jinfo[1][1]
+                    and len(jinfo[0][0].lanes) > len(jinfo[1][0].lanes)
+                )
+            ):
+                jtype = "zipper"
+            junction_id = f"junction-{jcnt}"
+            shape_str = re.sub(stringify, " ", str(jgeom[0])).strip()
+            shape_str = re.sub(strip, r"\1", shape_str)
+            inc_lanes_str = " ".join(inc_lanes)
+            junction = elem_maker.junction(
+                id=junction_id,
+                type=jtype,
+                x=str(jgeom[1][0]),
+                y=str(jgeom[1][1]),
+                incLanes=inc_lanes_str,
+                intLanes="",
+                shape=shape_str,
+            )
+            if jtype == "zipper":
+                for i, il in enumerate(inc_lanes):
+                    # not sure why Sumo requires this since I think it should be obvious, but whatever...
+                    foes = "1" * len(inc_lanes)
+                    response = "1" * len(inc_lanes)
+                    request = elem_maker.request(
+                        index=f"{i}", foes=foes, response=response, cont="0"
+                    )
+                    junction.append(request)
+            junctions.append(junction)
+            for road, start in jinfo:
+                # use setdefault to not overwrite entries from intersections above...
+                if start:
+                    road_starts.setdefault(road, junction_id)
+                else:
+                    road_ends.setdefault(road, junction_id)
+            jcnt += 1
+
+        # now create edges (nd their lanes) for all remaining non-junction roads
+        for road in self._roads.values():
+            if road.is_junction:
+                continue
+            if road.is_composite:
+                continue
+            edge = elem_maker.edge
+            # (have to use dict here instead of fields because "from" is a keyword)
+            new_edge = edge(
+                {
+                    "id": edge_el_id(road),
+                    "from": road_starts[road],
+                    "to": road_ends[road],
+                    "priority": "-1",
+                    "spreadType": "center",
+                }
+            )
+            for lane in road.lanes:
+                lane_shape_str = re.sub(stringify, " ", f"{lane._lane_polygon}").strip()
+                lane_shape_str = re.sub(strip, r"\1", lane_shape_str)
+                shape = lane._lane_polygon
+                lane_el = elem_maker.lane(
+                    id=lane_el_id(lane),
+                    index=str(lane.index),
+                    speed=str(lane.speed_limit),
+                    length=str(lane.length),
+                    width=str(lane.width_at_offset(0)[0]),
+                    shape=lane_shape_str,
+                )
+                new_edge.append(lane_el)
+            sumo_net.append(new_edge)
+
+        # junctions have to be written out _after_ edges or Sumo complains about forward refs...
+        sumo_net.append(junctions)
+
+        # finally, lane connections have to be written last
+        connections = elem_maker.connections()
+        for from_lane in self._lanes.values():
+            from_edge_id = lane_to_internal.get(from_lane, edge_el_id(from_lane.road))
+            for to_lane in from_lane.outgoing_lanes:
+                to_edge_id = lane_to_internal.get(to_lane, edge_el_id(to_lane.road))
+                # Sumo requires "state" to be specified, but it's unclear what it is or what possible values we can use.  (TODO)
+                # TODO:  I don't think you need connections for zipper nodes?
+                direction = turn_dir(from_lane, to_lane)
+                # (have to use dict here instead of fields because "from" is a keyword)
+                connection = elem_maker.connection(
+                    {
+                        "from": from_edge_id,
+                        "to": to_edge_id,
+                        "fromLane": "0"
+                        if from_edge_id[0] == ":"
+                        else str(from_lane.index),
+                        "toLane": "0" if to_edge_id[0] == ":" else str(to_lane.index),
+                        "dir": direction,
+                        "state": "M",
+                    }
+                )
+                connections.append(connection)
+        sumo_net.append(connections)
+
+        xml.ElementTree(sumo_net).write(
+            output_path, pretty_print=True, encoding="UTF-8", xml_declaration=True
+        )

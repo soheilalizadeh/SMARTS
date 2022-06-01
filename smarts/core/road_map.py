@@ -66,6 +66,13 @@ class RoadMap:
         """Check if the MapSpec Object source points to the same RoadMap instance as the current"""
         raise NotImplementedError
 
+    def export(self, target_format: str, output_path: str, overwrite: bool = True):
+        """Attempts to write this RoadMap into a file at output_path in the
+        specified target format.  Different implementations may support different
+        target formats.  If the specified target_format is not supported,
+        the implementation should raise a ValueError Exception."""
+        raise NotImplementedError
+
     def to_glb(self, at_path: str):
         """Build a glb file for camera rendering and envision"""
         raise NotImplementedError()

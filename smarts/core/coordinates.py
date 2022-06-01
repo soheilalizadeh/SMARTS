@@ -23,7 +23,7 @@ from typing import Any, NamedTuple, Optional, SupportsFloat, Tuple, Union
 
 import numpy as np
 from cached_property import cached_property
-from shapely.geometry import Point as SPoint
+from shapely.geometry import Point as SPoint, Polygon
 from typing_extensions import SupportsIndex
 
 from smarts.core.utils.math import (
@@ -145,9 +145,9 @@ class BoundingBox:
     def center(self):
         """The center point of the box."""
         return Point(
-            x=(self.min_pt.x + self.max_pt.x) / 2,
-            y=(self.min_pt.y + self.max_pt.y) / 2,
-            z=(self.min_pt.z + self.max_pt.z) / 2,
+            x=0.5 * (self.min_pt.x + self.max_pt.x),
+            y=0.5 * (self.min_pt.y + self.max_pt.y),
+            z=0.5 * (self.min_pt.z + self.max_pt.z),
         )
 
     @property
@@ -155,7 +155,21 @@ class BoundingBox:
         """The box dimensions. This will lose offset information."""
         return Dimensions(length=self.length, width=self.width, height=self.height)
 
+    @cached_property
+    def as_shapely(self) -> Polygon:
+        """The box as a Shapely Polygon."""
+        return Polygon(
+            (
+                self.min_pt[:2],
+                (self.min_pt.x, self.max_pt.y),
+                self.max_pt[:2],
+                (self.max_pt.x, self.min_pt.y),
+                self.min_pt[:2],
+            )
+        )
+
     def contains(self, pt: Point) -> bool:
+
         """returnx True iff pt is fully within the bounding box.  If any bbox coordinates are None, it's considered unbounded on that dimension/axis."""
         return (
             self.min_pt is None

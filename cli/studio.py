@@ -249,7 +249,7 @@ def replay(directory: Sequence[str], timestep: float, endpoint: str):
 @click.argument(
     "tfrecords",
     type=click.Path(exists=True),
-    metavar="<script>",
+    metavar="<dataset>",
     nargs=-1,
     required=True,
 )
