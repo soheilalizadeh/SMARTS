@@ -2017,12 +2017,12 @@ class WaymoMap(RoadMap):
                     else jr._bbox.min_pt.y
                 )
                 x_max = (
-                    min(jr._bbox.max_pt.x, x_max)
+                    max(jr._bbox.max_pt.x, x_max)
                     if x_max is not None
                     else jr._bbox.max_pt.x
                 )
                 y_max = (
-                    min(jr._bbox.max_pt.y, y_max)
+                    max(jr._bbox.max_pt.y, y_max)
                     if y_max is not None
                     else jr._bbox.max_pt.y
                 )
@@ -2046,7 +2046,7 @@ class WaymoMap(RoadMap):
                 y=str(centroid_y),
                 incLanes=inc_lanes_str,
                 intLanes=int_lanes_str,
-                shape=f"{x_min},{y_min} {x_max},{y_max}",
+                shape=f"{x_min},{y_min} {x_min},{y_max} {x_max},{y_max} {x_max},{y_min} {x_min},{y_min}",
             )
             # Sumo requires we specify foes for junctions with internal lanes.
             for i, il in enumerate(int_lanes):
@@ -2082,34 +2082,46 @@ class WaymoMap(RoadMap):
             junctions_dict.setdefault((start_line, start_pt), []).append((road, True))
             junctions_dict.setdefault((end_line, end_pt), []).append((road, False))
         for jgeom, jinfo in junctions_dict.items():
+            junction_id = f"junction-{jcnt}"
+            jcnt += 1
+            jtype = "unregulated"  # ... or "priority"? if we use "priority", then Sumo wants more info.
+            for road, start in jinfo:
+                sedict = road_starts if start else road_ends
+                # TODO:  but it could get added in this loop too?!
+                junction_junction = sedict.get(road)
+                if junction_junction:
+                    # this road feeds into an already-created junction from above,
+                    # but Sumo wants to know about this junction too for managing
+                    # traffic in the overall junction (this one may have different foes)..
+                    sedict[road] = junction_junction
+                    junction_id = f":{junction_id}"
+                    jtype = "internal"
+                    # TODO:  then add "via" connections below for this road's lanes to ??? (the next non-internal lane)
+                else:
+                    sedict[road] = junction_id
+
             inc_lanes = [
                 lane_el_id(lane)
                 for road, start in jinfo
                 for lane in road.lanes
-                if not start and road not in road_ends
+                if not start
             ]
-            if not inc_lanes and not any(
-                start and road not in road_starts for road, start in jinfo
-            ):
-                # these junctions were (probably?) taken care of as intersections above...
-                continue
-            jtype = "unregulated"  # ... or "priority"? if we use "priority", then Sumo wants more info.
-            if len(jinfo) == 1:
-                jtype = "dead_end"
-            elif len(jinfo) == 2 and (
-                (
-                    jinfo[0][1]
-                    and not jinfo[1][1]
-                    and len(jinfo[0][0].lanes) < len(jinfo[1][0].lanes)
-                )
-                or (
-                    not jinfo[0][1]
-                    and jinfo[1][1]
-                    and len(jinfo[0][0].lanes) > len(jinfo[1][0].lanes)
-                )
-            ):
-                jtype = "zipper"
-            junction_id = f"junction-{jcnt}"
+            if jtype != "internal":
+                if len(jinfo) == 1:
+                    jtype = "dead_end"
+                elif len(jinfo) == 2 and (
+                    (
+                        jinfo[0][1]
+                        and not jinfo[1][1]
+                        and len(jinfo[0][0].lanes) < len(jinfo[1][0].lanes)
+                    )
+                    or (
+                        not jinfo[0][1]
+                        and jinfo[1][1]
+                        and len(jinfo[0][0].lanes) > len(jinfo[1][0].lanes)
+                    )
+                ):
+                    jtype = "zipper"
             shape_str = re.sub(stringify, " ", str(jgeom[0])).strip()
             shape_str = re.sub(strip, r"\1", shape_str)
             inc_lanes_str = " ".join(inc_lanes)
@@ -2131,14 +2143,8 @@ class WaymoMap(RoadMap):
                         index=f"{i}", foes=foes, response=response, cont="0"
                     )
                     junction.append(request)
+
             junctions.append(junction)
-            for road, start in jinfo:
-                # use setdefault to not overwrite entries from intersections above...
-                if start:
-                    road_starts.setdefault(road, junction_id)
-                else:
-                    road_ends.setdefault(road, junction_id)
-            jcnt += 1
 
         # now create edges (and their lanes) for all remaining non-junction roads
         for road in self._roads.values():
