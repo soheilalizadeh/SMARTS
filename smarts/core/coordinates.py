@@ -23,7 +23,7 @@ from typing import Any, NamedTuple, Optional, SupportsFloat, Tuple, Union
 
 import numpy as np
 from cached_property import cached_property
-from shapely.geometry import Point as SPoint, Polygon
+from shapely.geometry import box as Sbox, Point as SPoint, Polygon
 from typing_extensions import SupportsIndex
 
 from smarts.core.utils.math import (
@@ -158,15 +158,7 @@ class BoundingBox:
     @cached_property
     def as_shapely(self) -> Polygon:
         """The box as a Shapely Polygon."""
-        return Polygon(
-            (
-                self.min_pt[:2],
-                (self.min_pt.x, self.max_pt.y),
-                self.max_pt[:2],
-                (self.max_pt.x, self.min_pt.y),
-                self.min_pt[:2],
-            )
-        )
+        return Sbox(self.min_pt.x, self.min_pt.y, self.max_pt.x, self.max_pt.y, False)
 
     def contains(self, pt: Point) -> bool:
 

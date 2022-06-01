@@ -1890,6 +1890,7 @@ class WaymoMap(RoadMap):
     def _write_as_sumo(self, output_path: str):
         import lxml.etree as xml
         from lxml.builder import ElementMaker
+        from shapely.geometry import LineString
 
         # map.net.xml preamble
         nsmap = {"xsi": "http://www.w3.org/2001/XMLSchema-instance"}
@@ -1902,16 +1903,14 @@ class WaymoMap(RoadMap):
                 f"{{{nsmap['xsi']}}}noNamespaceSchemaLocation": "http://sumo.dlr.de/xsd/net_file.xsd",
             }
         )
-        location = elem_maker.location
         bb = self.bounding_box
-        sumo_net.append(
-            location(
-                netOffset="0.00,0.00",
-                convBoundary=f"{bb.min_pt.x},{bb.min_pt.y},{bb.max_pt.x},{bb.max_pt.y}",
-                origBoundary="-10000000000.00,-10000000000.00,10000000000.00,10000000000.00",
-                projParameter="!",
-            )
+        location = elem_maker.location(
+            netOffset="0.00,0.00",
+            convBoundary=f"{bb.min_pt.x},{bb.min_pt.y},{bb.max_pt.x},{bb.max_pt.y}",
+            origBoundary="-10000000000.00,-10000000000.00,10000000000.00,10000000000.00",
+            projParameter="!",
         )
+        sumo_net.append(location)
 
         def midpoint(p1, p2) -> Tuple[float, float]:
             return (round(0.5 * (p1[0] + p2[0]), 2), round(0.5 * (p1[1] + p2[1]), 2))
@@ -1937,6 +1936,14 @@ class WaymoMap(RoadMap):
             if abs(ad) < math.pi / 4:
                 return "s"
             return "r" if ad > 0 else "l"
+
+        def road_shape(road) -> str:
+            # poor-man's attempt to get a center-line for the road
+            road_width = sum(lane.width_at_offset(0)[0] for lane in road.lanes)
+            edge_shape = LineString(road._leftmost_edge_shape).parallel_offset(
+                0.5 * road_width, "right"
+            )
+            return " ".join(map(lambda p: f"{p[0]},{p[1]}", edge_shape.coords))
 
         stringify = re.compile(r"(\),?)|( ?\()|(\[)|(\])")
         strip = re.compile(r"(\s|,)\s+")
@@ -2133,21 +2140,21 @@ class WaymoMap(RoadMap):
                     road_ends.setdefault(road, junction_id)
             jcnt += 1
 
-        # now create edges (nd their lanes) for all remaining non-junction roads
+        # now create edges (and their lanes) for all remaining non-junction roads
         for road in self._roads.values():
             if road.is_junction:
                 continue
             if road.is_composite:
                 continue
-            edge = elem_maker.edge
             # (have to use dict here instead of fields because "from" is a keyword)
-            new_edge = edge(
+            new_edge = elem_maker.edge(
                 {
                     "id": edge_el_id(road),
                     "from": road_starts[road],
                     "to": road_ends[road],
                     "priority": "-1",
                     "spreadType": "center",
+                    # "shape": road_shape(road),
                 }
             )
             for lane in road.lanes:
