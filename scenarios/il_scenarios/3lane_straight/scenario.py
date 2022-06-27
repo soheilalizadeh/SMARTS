@@ -62,7 +62,7 @@ for name, routes in enumerate(route_comb):
     traffic[str(name)] = Traffic(
         flows=[
             Flow(
-                route=Route(begin=("gneE3", r[0], 0), end=("gneE3", r[1], "max"),),
+                route=Route(begin=("gneE3", r[0], 0), end=("E0", r[1], "max"),),
                 # Random flow rate, between x and y vehicles per minute.
                 rate=10 * random.uniform(10, 20),
                 # Random flow start time, between x and y seconds.
@@ -74,14 +74,14 @@ for name, routes in enumerate(route_comb):
                 end=60 * 15,
                 actors={normal: 1},
                 # comment the 'random_spaced=True' below out if you dont have the change of PR https://github.com/huawei-noah/SMARTS/pull/1460 on your branch
-                randomly_spaced=True,
+                # randomly_spaced=True,
             )
             for r in routes
         ]
     )
 
 
-route = Route(begin=("gneE3", 0, 10), end=("gneE3", 0, "max"))
+route = Route(begin=("gneE3", 0, 10), end=("E0", 0, "max"))
 ego_missions = [
     Mission(
         route=route, start_time=17,  # Delayed start, to ensure road has prior traffic.
