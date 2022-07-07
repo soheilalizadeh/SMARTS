@@ -88,7 +88,7 @@ cd <path/to/SMARTS>
 bash utils/setup/install_deps.sh
 
 # Setup virtual environment. Presently at least Python 3.7 and higher is officially supported.
-python3.7 -m venv .venv
+python3.8 -m venv .venv
 
 # Enter virtual environment to install dependencies.
 source .venv/bin/activate
@@ -284,10 +284,10 @@ Singularity> exit
 # 1. Run container in interactive mode.
 $ singularity shell --containall --bind ../SMARTS:/src ./utils/singularity/smarts.sif
 # Inside the container
-Singularity> python3.7 /src/examples/single_agent.py /src/scenarios/sumo/loop/ --headless
+Singularity> python3.8 /src/examples/single_agent.py /src/scenarios/sumo/loop/ --headless
 
 # 2. Run commands within the container from the host system.
-$ singularity exec --containall --bind ../SMARTS:/src ./utils/singularity/smarts.sif python3.7 /src/examples/single_agent.py /src/scenarios/sumo/loop/ --headless
+$ singularity exec --containall --bind ../SMARTS:/src ./utils/singularity/smarts.sif python3.8 /src/examples/single_agent.py /src/scenarios/sumo/loop/ --headless
 
 # 3. Run container instance in the background.
 $ singularity instance start --containall --bind ../SMARTS:/src ./utils/singularity/smarts.sif smarts_train /src/examples/single_agent.py /src/scenarios/sumo/loop/ --headless
