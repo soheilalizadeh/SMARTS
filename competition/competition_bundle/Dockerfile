@@ -1,23 +1,24 @@
-# Steps to build and push minimal SMARTS docker image
+# Steps to build and push codalab docker image
 # ```bash
-# $ cd </path/to/SMARTS>
-# $ export VERSION=v0.6.1
-# $ docker build --no-cache -f ./utils/docker/Dockerfile.minimal -t huaweinoah/smarts:$VERSION-minimal .
+# $ cd </path/to/SMARTS/competition/competition_bundle>
+# $ export VERSION=codalab
+# $ docker build --no-cache -f ./Dockerfile -t adaickalavan/smarts:$VERSION .
 # $ docker login
-# $ docker push huaweinoah/smarts:$VERSION-minimal
+# $ docker push adaickalavan/smarts:$VERSION
 # ```
 
 FROM ubuntu:bionic
 
 ARG DEBIAN_FRONTEND=noninteractive
 
-# Install libraries
+# Install libraries.
 RUN apt-get update --fix-missing && \
     apt-get install -y \
         software-properties-common && \
     add-apt-repository -y ppa:deadsnakes/ppa && \
     apt-get update && \
     apt-get install -y \
+        git \
         libspatialindex-dev \
         python3.8 \
         python3.8-venv \
@@ -33,11 +34,5 @@ ENV VIRTUAL_ENV=/opt/.venv
 RUN python3.8 -m venv $VIRTUAL_ENV
 ENV PATH="$VIRTUAL_ENV/bin:$PATH"
 RUN pip install --upgrade pip wheel
-
-# For Envision
-EXPOSE 8081
-
-# Suppress message of missing /dev/input folder
-RUN echo "mkdir -p /dev/input" >> ~/.bashrc
 
 SHELL ["/bin/bash", "-c", "-l"]

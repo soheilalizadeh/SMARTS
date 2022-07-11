@@ -1,31 +1,31 @@
 # Drive SMARTS Competition
 ---
-admin_names: ma-huawei
-title: Drive SMARTS Competition
+title: Drive SMARTS Competition 2
 description: Drive SMARTS Competition.
 image: logo.jpg
 has_registration: True
-end_date: null
+end_date: 2022-11-01
+admin_names: ma-huawei, adai
 html:
     overview: overview.html  # Basic overview of the challenge.
     evaluation: evaluation.html  # How is the challenge being scored?
     terms: terms_and_conditions.html  # Participation terms, licensing, etc.
     data: data.html  # Where to find data for the competition, how to download it.
+competition_docker_image: 'adaickalavan/smarts:codalab'
 
 # Phases
 phases:
     1:
-        color: green
         phasenumber: 1
         description: Online learning
         label: "Track 1"
-        start_date: 2022-08-01
+        start_date: 2022-07-01
         max_submissions: 1000
         is_scoring_only: False
         scoring_program: scoring_program.zip
         reference_data: track1_evaluation.zip
+        color: green
     2:
-        color: blue
         phasenumber: 2
         description: Offline learning
         label: "Track 2"
@@ -34,6 +34,7 @@ phases:
         is_scoring_only: False
         scoring_program: scoring_program.zip
         reference_data: track2_evaluation.zip
+        color: blue
 
 # Leaderboard
 leaderboard:

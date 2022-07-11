@@ -18,7 +18,7 @@ To setup the simulator, which is called SMARTS, run the following commands,
     ./install_deps.sh
 
     # setup virtual environment; presently only Python 3.7.x is officially supported
-    python3.7 -m venv .venv
+    python3.8 -m venv .venv
 
     # enter virtual environment to install all dependencies
     source .venv/bin/activate

@@ -29,9 +29,9 @@ def submitted_wrappers():
         List[wrappers]: List of wrappers. Default is empty list [].
     """
 
-    from train.action import Action as DiscreteAction
-    from train.observation import Concatenate, FilterObs
-    from train.reward import Reward
+    from action import Action as DiscreteAction
+    from observation import Concatenate, FilterObs
+    from reward import Reward
 
     from smarts.core.controllers import ActionSpaceType
     from smarts.env.wrappers.format_action import FormatAction
@@ -62,8 +62,13 @@ class Policy(BasePolicy):
         performed here. To be implemented by the user.
         """
 
+<<<<<<< HEAD
         from d3rlpy.algos import CQL
         
+=======
+        import stable_baselines3 as sb3lib
+        import network
+>>>>>>> bd946c93e010f2fed1f3b94927557af01556effb
 
         self.model = CQL.from_json(Path(__file__).absolute().parents[0]/'model/params.json', use_gpu=True)
         self.model.load_model(Path(__file__).absolute().parents[0]/'model/model.pt')
