@@ -29,8 +29,8 @@ class Action(gym.ActionWrapper):
 
         Note: Users should not directly call this method.
         """
-        wrapped_act = self._wrapper(action)
-        return wrapped_act
+        # wrapped_act = self._wrapper(action)
+        return action
 
 
 def _discrete() -> Tuple[Callable[[Dict[str, int]], Dict[str, np.ndarray]], gym.Space]:
