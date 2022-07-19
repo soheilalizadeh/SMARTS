@@ -107,8 +107,9 @@ for scenario in scenarios[index:len(scenarios)]:
                 obs.append(np.asarray(image).reshape(3,256,256))
                 actions.append([dx, dy, dheading])
                 dist_reward = vehicle_data[float(sim_time)]['dist']
-                goal_reward = goal_region_reward(threshold, goal_pos_x, goal_pos_y, current_position[0], current_position[1])
-                rewards.append(dist_reward + goal_reward)
+                # goal_reward = goal_region_reward(threshold, goal_pos_x, goal_pos_y, current_position[0], current_position[1])
+                # rewards.append(dist_reward + goal_reward)
+                rewards.append(dist_reward)
                 terminals.append(terminal)
             print(str(len(obs)) + ' pieces of data are added into dataset.' )
 
