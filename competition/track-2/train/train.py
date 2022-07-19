@@ -112,15 +112,9 @@ for scenario in scenarios[index:len(scenarios)]:
                 actions.append([dx, dy, dheading])
 
                 dist_reward = vehicle_data[float(sim_time)]['dist']
-<<<<<<< HEAD
-                # goal_reward = goal_region_reward(threshold, goal_pos_x, goal_pos_y, current_position[0], current_position[1])
-                # rewards.append(dist_reward + goal_reward)
-                rewards.append(dist_reward)
-=======
                 goal_reward = goal_region_reward(threshold, goal_pos_x, goal_pos_y, current_position[0], current_position[1])
                 rewards.append(dist_reward + goal_reward)
                 
->>>>>>> 80dbbdff7c9c7d08715a3bc8a6749b88d2737873
                 terminals.append(terminal)
             print(str(len(obs)) + ' pieces of data are added into dataset.' )
 
