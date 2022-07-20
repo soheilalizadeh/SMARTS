@@ -68,7 +68,7 @@ for scenario in scenarios[index:len(scenarios)]:
                 if vehicle_id not in vehicle_ids:
                     vehicle_ids.append(vehicle_id)
 
-        for id in vehicle_ids:
+        for id in vehicle_ids[0:2]:
             print('adding data for vehicle id ' + id + ' in scenario ' + scenario)
 
             with client.file(path + scenario +  '/Agent-history-vehicle-' + id + '.pkl', 'rb') as f:
@@ -83,7 +83,7 @@ for scenario in scenarios[index:len(scenarios)]:
 
             goal_pos_x = vehicle_data[float(image_names[-1].split('_Agent')[0])]['ego']['pos'][0]
             goal_pos_y = vehicle_data[float(image_names[-1].split('_Agent')[0])]['ego']['pos'][1]
-            threshold = 0.2
+            threshold = 3
 
             for i in range(len(image_names) - 1):
                 imgfile = client.open(path + scenario + '/' + image_names[i], 'r')
@@ -118,7 +118,7 @@ for scenario in scenarios[index:len(scenarios)]:
                 terminals.append(terminal)
             print(str(len(obs)) + ' pieces of data are added into dataset.' )
 
-        obs = np.array(obs)
+        obs = np.array(obs, dtype=np.uint8)
         actions = np.array(actions)
         rewards = np.array(rewards)
         terminals = np.array(terminals)
@@ -130,12 +130,12 @@ for scenario in scenarios[index:len(scenarios)]:
             saved_models = glob.glob('d3rlpy_logs/*')
             latest_model = max(saved_models, key=os.path.getctime)
             model = CQL.from_json('d3rlpy_logs/1/params.json', use_gpu=True)
-            model.load_model(latest_model + '/model_100.pt')
+            model.load_model(latest_model + '/model_1.pt')
 
         model.fit(dataset, 
                 eval_episodes=dataset, 
-                n_steps_per_epoch = 100,
-                n_steps = 100, 
+                n_steps_per_epoch = 1,
+                n_steps = 1, 
                 scorers={
                             'td_error': td_error_scorer,
                             'value_scale': average_value_estimation_scorer,

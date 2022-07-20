@@ -69,7 +69,7 @@ def inside_coor_to_pixel(goal_x, goal_y, cur_x, cur_y):
         x_pixel_loc = min(128 + round(x_diff * ratio), 255)
     
     goal_obs = np.zeros((1,256,256))
-    goal_obs[0, y_pixel_loc, x_pixel_loc] = 1
+    goal_obs[0, y_pixel_loc, x_pixel_loc] = 255
     return goal_obs
 
 def outside_coor_to_pixel(goal_x, goal_y, cur_x, cur_y):
@@ -146,7 +146,7 @@ def outside_coor_to_pixel(goal_x, goal_y, cur_x, cur_y):
         x_pixel_loc = 128
     
     goal_obs = np.zeros((1,256,256))
-    goal_obs[0, y_pixel_loc, x_pixel_loc] = 1
+    goal_obs[0, y_pixel_loc, x_pixel_loc] = 255
     return goal_obs
 
 # mark goal position with integer 1, other entries are all 0
