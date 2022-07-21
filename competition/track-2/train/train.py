@@ -7,7 +7,7 @@ import pickle
 import numpy as np
 import d3rlpy
 from d3rlpy.dataset import MDPDataset
-from d3rlpy.algos import CQL, BCQ
+from d3rlpy.algos import CQL
 import os
 from PIL import Image
 import re
@@ -17,6 +17,7 @@ import pathlib
 from d3rlpy.metrics.scorer import average_value_estimation_scorer
 from d3rlpy.metrics.scorer import td_error_scorer
 import glob
+from matplotlib import pyplot as plt
 
 
 
@@ -68,7 +69,7 @@ for scenario in scenarios[index:len(scenarios)]:
                 if vehicle_id not in vehicle_ids:
                     vehicle_ids.append(vehicle_id)
 
-        for id in vehicle_ids[0:2]:
+        for id in vehicle_ids:
             print('adding data for vehicle id ' + id + ' in scenario ' + scenario)
 
             with client.file(path + scenario +  '/Agent-history-vehicle-' + id + '.pkl', 'rb') as f:
@@ -104,16 +105,17 @@ for scenario in scenarios[index:len(scenarios)]:
                     terminal = 0
                 else:
                     terminal = 1
-                
-                img_obs = np.asarray(image).reshape(3,256,256)
-                goal_obs = get_goal_layer(goal_pos_x, goal_pos_y, current_position[0], current_position[1], current_heading)
-                obs.append(np.concatenate((img_obs, goal_obs), axis=0))
 
+                bev = np.moveaxis(np.asarray(image), -1, 0)
+                # goal_obs = get_goal_layer(goal_pos_x, goal_pos_y, current_position[0], current_position[1], current_heading)
+                # obs.append(np.concatenate((img_obs, goal_obs), axis=0))
+                obs.append(bev)
                 actions.append([dx, dy, dheading])
 
                 dist_reward = vehicle_data[float(sim_time)]['dist']
-                goal_reward = goal_region_reward(threshold, goal_pos_x, goal_pos_y, current_position[0], current_position[1])
-                rewards.append(dist_reward + goal_reward)
+                # goal_reward = goal_region_reward(threshold, goal_pos_x, goal_pos_y, current_position[0], current_position[1])
+                # rewards.append(dist_reward + goal_reward)
+                rewards.append(dist_reward)
                 
                 terminals.append(terminal)
             print(str(len(obs)) + ' pieces of data are added into dataset.' )
@@ -130,12 +132,12 @@ for scenario in scenarios[index:len(scenarios)]:
             saved_models = glob.glob('d3rlpy_logs/*')
             latest_model = max(saved_models, key=os.path.getctime)
             model = CQL.from_json('d3rlpy_logs/1/params.json', use_gpu=True)
-            model.load_model(latest_model + '/model_1.pt')
+            model.load_model(latest_model + '/model_100.pt')
 
         model.fit(dataset, 
                 eval_episodes=dataset, 
-                n_steps_per_epoch = 1,
-                n_steps = 1, 
+                n_steps_per_epoch = 100,
+                n_steps = 100, 
                 scorers={
                             'td_error': td_error_scorer,
                             'value_scale': average_value_estimation_scorer,

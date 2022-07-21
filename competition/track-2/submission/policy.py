@@ -1,6 +1,7 @@
 from pathlib import Path
 from typing import Any, Dict
 import numpy as np
+from utility import get_goal_layer
 
 # Environment variables (optional)
 IMG_METERS = 50  # Observation image area size in meters.
@@ -82,7 +83,14 @@ class Policy(BasePolicy):
         """
         wrapped_act = {}
         for agent_id, agent_obs in obs.items():
-            action = self.model.predict(np.array([agent_obs['rgb'].reshape(3, 256, 256)]))[0]
+            
+            # img_obs = np.asarray(image).reshape(3,256,256)
+            # goal_pos = agent_obs['mission']['goal_pos']
+            # cur_pos = agent_obs['ego']['pos']
+            img_obs = np.moveaxis(agent_obs['rgb'], -1, 0)
+            # goal_obs = get_goal_layer(goal_pos[0], goal_pos[1], cur_pos[0], cur_pos[1], cur_pos[2])
+            # state = np.concatenate((img_obs, goal_obs), axis=0)
+            action = self.model.predict([img_obs])[0]
             print(action)
             target_pose = np.array([(action[0] + agent_obs['ego']['pos'][0]), action[1] + agent_obs['ego']['pos'][1], action[2] + agent_obs['ego']['heading'], 0.1])
             wrapped_act.update({agent_id: target_pose})
